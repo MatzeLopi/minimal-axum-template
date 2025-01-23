@@ -22,6 +22,9 @@ pub enum Error {
 
     #[error("an internal server error occurred")]
     Anyhow(#[from] anyhow::Error),
+
+    #[error("conflict, resource already exists")]
+    Conflict,
 }
 
 impl Error {
@@ -32,6 +35,7 @@ impl Error {
             Self::NotFound => StatusCode::NOT_FOUND,
             Self::InternalServerError => StatusCode::INTERNAL_SERVER_ERROR,
             Self::Sqlx(_) | Self::Anyhow(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            Self::Conflict => StatusCode::CONFLICT,
         }
     }
 }

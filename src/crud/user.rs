@@ -1,12 +1,33 @@
-use crate::http::utils::random_string;
+use crate::{
+    http::{error::Error as HTTPError, utils::random_string},
+    schemas::users::User,
+};
 use sqlx::PgPool;
 use uuid::Uuid;
 
-// TODO: Implement this function
-pub async fn get_user_by_username(username: &str, db: &PgPool) {}
+pub async fn get_user_by_id(id: &Uuid, db: &PgPool) -> Result<User, HTTPError> {
+    /// Get a user by their id
+    ///
+    /// # Arguments
+    ///  id: &Uuid - The user id
+    ///  db: PgPool - The database connection pool
+    ///
+    /// # Returns
+    ///  Result<User, HTTPError> - The user if found, an error otherwise
+    let result = sqlx::query!("SELECT * FROM users WHERE id = $1", id)
+        .fetch_one(db)
+        .await;
 
-// TODO: Implement this function
-pub async fn get_user_by_id(id: &Uuid, db: &PgPool) {}
+    match result {
+        Ok(row) => Ok(User {
+            id: row.id,
+            username: row.username,
+            email: row.email,
+            verified: row.is_verified,
+        }),
+        Err(e) => Err(HTTPError::from(e)),
+    }
+}
 
 pub async fn check_username(username: &str, db: &PgPool) -> bool {
     /// Check if the username exists in the DB
@@ -51,11 +72,22 @@ pub async fn create_user(
     email: &str,
     password_hash: &str,
     db: &PgPool,
-) -> Result<(), sqlx::Error> {
+) -> Result<(), HTTPError> {
     /// Create a new user in DB
     ///
+    /// # Arguments
+    ///  username: &str - The username of the user
+    ///  email: &str - The email of the user
+    ///  password_hash: &str - The password hash of the user
+    ///
+    /// # Returns
+    ///  Result<(), HTTPError> - The result of the operation
     let uid = Uuid::new_v4();
     let verification_token = random_string(8);
+
+    if check_username(username, db).await || check_email(email, db).await {
+        return Err(HTTPError::Conflict);
+    }
 
     let result = sqlx::query!(
         "INSERT INTO users (id, username, email, password_hash, verification_token) VALUES ($1, $2, $3, $4, $5)",
@@ -68,24 +100,27 @@ pub async fn create_user(
 
     match result {
         Ok(_) => Ok(()),
-        Err(e) => Err(e),
+        Err(e) => Err(HTTPError::from(e)),
     }
 }
 
-pub async fn delete_user(username: &str, db: &PgPool) -> Result<(), sqlx::Error> {
+pub async fn delete_user(uid: &Uuid, db: &PgPool) -> Result<(), HTTPError> {
     /// Delete a user from DB
     ///
     /// # Arguments
-    ///  username: &str - The username of the user
+    ///  uid: &Uuid - The user id of the user
     ///  db: &PgPool - The database connection pool
     ///
     /// # Returns
     ///  Result<(), sqlx::Error> - The result of the operation
-    let _ = sqlx::query!("DELETE FROM users WHERE username = $1", username)
-        .bind(username)
+    let result = sqlx::query!("DELETE FROM users WHERE id = $1", uid)
+        .bind(uid)
         .execute(db)
-        .await?;
-    Ok(())
+        .await;
+    match result {
+        Ok(_) => Ok(()),
+        Err(e) => Err(HTTPError::from(e)),
+    }
 }
 pub async fn get_hash(username: &str, db: &PgPool) -> Result<(Uuid, String), sqlx::Error> {
     /// Get the user's id and password hash from the DB
@@ -101,8 +136,7 @@ pub async fn get_hash(username: &str, db: &PgPool) -> Result<(Uuid, String), sql
         username
     )
     .fetch_one(db)
-    .await
-    .expect("Failed to fetch user");
+    .await?;
 
     Ok((row.id, row.password_hash))
 }

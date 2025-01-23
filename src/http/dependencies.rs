@@ -38,7 +38,8 @@ struct AuthClaims {
     exp: i64,
 }
 
-fn hash_password(password: String) -> Result<String, HTTPError> {
+// TODO: Try to make it so that the password is is not borrowed but owned.
+pub fn hash_password(password: &str) -> Result<String, HTTPError> {
     let salt = SaltString::generate(&mut OsRng);
     let argon2 = Argon2::default();
 

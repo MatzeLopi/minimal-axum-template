@@ -4,11 +4,13 @@ use axum::Router;
 use sqlx::PgPool;
 use std::sync::Arc;
 
-mod dependencies;
-mod error;
+pub mod error;
 pub mod utils;
+
+mod dependencies;
+mod routers;
+
 // Include auth router
-mod auth;
 
 #[derive(Clone)]
 struct AppState {
@@ -37,5 +39,7 @@ pub async fn serve(config: Config, db: PgPool) -> anyhow::Result<()> {
 
 // Define the API router
 fn api_router(router: Router, shared_state: Arc<AppState>) -> Router {
-    return router.merge(auth::router(shared_state.clone())); // Add routes from the `auth` module
+    router
+        .merge(routers::auth::router(shared_state.clone())) // Add auth router
+        .merge(routers::user::router(shared_state.clone())) // Add user router
 }

@@ -1,7 +1,7 @@
 // Router for auth and csrf token generation
 use crate::{
     http::{dependencies, error::Error as HTTPError, utils, AppState},
-    schemas::users::{NewUser, UserLogin},
+    schemas::users::UserLogin,
 };
 
 use axum::{
@@ -18,7 +18,7 @@ pub fn router(state: Arc<AppState>) -> Router {
     Router::new()
         .route("/", get(ok))
         .route("/csft", get(get_csfr))
-        .route("token", post(token))
+        .route("/token", post(token))
         .with_state(state)
 }
 
@@ -60,12 +60,4 @@ async fn token(
         }
         Err(e) => Err(e),
     }
-}
-
-async fn create_user(user: &Json<NewUser>) -> impl IntoResponse {
-    // Create a new user
-}
-
-async fn delete_user(username: &str) -> impl IntoResponse {
-    // Delete a user
 }
