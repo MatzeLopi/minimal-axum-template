@@ -7,5 +7,6 @@ The idea for this repo is a minimal axum template which I or others can use as a
 - [x] CSFR protection
 - [ ] Database migration
 - [ ] State based resource access
+- [ ] E-Mail verification
 
 I am always happy for suggestions and contributions. If you have any ideas or want to contribute, feel free to open an issue or a pull request.
