@@ -4,7 +4,7 @@ use crate::{
     schemas::users::{NewUser, User},
 };
 use axum::{
-    extract::{Json, State},
+    extract::{Json, Path, State},
     http::StatusCode,
     response::IntoResponse,
     routing::{delete, get, post, Router},
@@ -16,6 +16,7 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route("/create-user", post(create_user))
         .route("/delete-user", delete(delete_user))
         .route("/me", get(me))
+        .route("/auth-user/:username/:token", get(auth_user))
         .with_state(state)
 }
 
@@ -38,9 +39,21 @@ async fn create_user(
 ) -> Result<impl IntoResponse, HTTPError> {
     let password_hash = dependencies::hash_password(&user.password)?;
 
-    _ = crud::user::create_user(&user.username, &user.email, &password_hash, &state.db).await?;
+    _ = crud::user::create_user(&user.username, &user.email, &password_hash, state).await?;
 
     Ok((StatusCode::CREATED, "User created successfully"))
+}
+
+async fn auth_user(
+    State(state): State<Arc<AppState>>,
+    Path((username, token)): Path<(String, String)>,
+) -> Result<impl IntoResponse, HTTPError> {
+    if crud::user::get_verification_token(&username, &state.db).await? == token {
+        _ = crud::user::verify_user(&username, &state.db).await?;
+        Ok((StatusCode::OK, "User successfully verified"))
+    } else {
+        Err(HTTPError::Forbidden)
+    }
 }
 
 async fn delete_user(

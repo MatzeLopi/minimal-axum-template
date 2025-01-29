@@ -3,26 +3,31 @@ use anyhow::Context;
 use axum::Router;
 use sqlx::PgPool;
 use std::sync::Arc;
-
 pub mod error;
 pub mod utils;
-
+use mail_send::SmtpClientBuilder;
 mod dependencies;
 mod routers;
 
 // Include auth router
 
 #[derive(Clone)]
-struct AppState {
-    config: Arc<Config>,
-    db: PgPool,
+pub struct AppState {
+    pub config: Arc<Config>,
+    pub db: PgPool,
+    pub smtp_builder: Arc<SmtpClientBuilder<String>>,
 }
 
-pub async fn serve(config: Config, db: PgPool) -> anyhow::Result<()> {
+pub async fn serve(
+    config: Config,
+    db: PgPool,
+    smtp_builder: SmtpClientBuilder<String>,
+) -> anyhow::Result<()> {
     // Create shared state
     let shared_state = Arc::new(AppState {
         config: Arc::new(config),
         db,
+        smtp_builder: Arc::new(smtp_builder),
     });
 
     // Build the app router

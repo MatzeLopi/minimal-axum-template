@@ -1,9 +1,56 @@
+use std::sync::Arc;
+
 use crate::{
-    http::{error::Error as HTTPError, utils::random_string},
+    http::{error::Error as HTTPError, utils::random_string, utils::send_verification, AppState},
     schemas::users::User,
 };
 use sqlx::PgPool;
 use uuid::Uuid;
+
+pub async fn get_verification_token(username: &str, db: &PgPool) -> Result<String, HTTPError> {
+    /// Get the verification token of a user
+    ///
+    /// # Arguments
+    ///  username: &str - The username of the user
+    ///  db: PgPool - The database connection pool
+    ///
+    /// # Returns
+    ///  Result<String, HTTPError> - The verification token if found, an error otherwise
+    let result = sqlx::query!(
+        "SELECT verification_token FROM users WHERE username = $1",
+        username
+    )
+    .fetch_one(db)
+    .await
+    .map_err(HTTPError::from)?;
+
+    match result.verification_token {
+        Some(token) => Ok(token),
+        None => Err(HTTPError::NotFound),
+    }
+}
+
+pub async fn verify_user(username: &str, db: &PgPool) -> Result<(), HTTPError> {
+    /// Verify a user
+    ///
+    /// # Arguments
+    ///  username: &str - The username of the user
+    ///  db: PgPool - The database connection pool
+    ///
+    /// # Returns
+    ///  Result<(), HTTPError> - The result of the operation
+    let result = sqlx::query!(
+        "UPDATE users SET is_verified = true WHERE username = $1",
+        username
+    )
+    .execute(db)
+    .await;
+
+    match result {
+        Ok(_) => Ok(()),
+        Err(e) => Err(HTTPError::from(e)),
+    }
+}
 
 pub async fn get_user_by_id(id: &Uuid, db: &PgPool) -> Result<User, HTTPError> {
     /// Get a user by their id
@@ -71,7 +118,7 @@ pub async fn create_user(
     username: &str,
     email: &str,
     password_hash: &str,
-    db: &PgPool,
+    state: Arc<AppState>,
 ) -> Result<(), HTTPError> {
     /// Create a new user in DB
     ///
@@ -82,6 +129,8 @@ pub async fn create_user(
     ///
     /// # Returns
     ///  Result<(), HTTPError> - The result of the operation
+    let db = &state.db;
+
     let uid = Uuid::new_v4();
     let verification_token = random_string(8);
 
@@ -90,13 +139,20 @@ pub async fn create_user(
     }
 
     let result = sqlx::query!(
-        "INSERT INTO users (id, username, email, password_hash, verification_token) VALUES ($1, $2, $3, $4, $5)",
+        "INSERT INTO users (id, username, email, password_hash, verification_token, is_verified) VALUES ($1, $2, $3, $4, $5 , false)",
         uid,
         username,
         email,
         password_hash,
         verification_token
-    ).bind(uid).bind(username).bind(email).bind(password_hash).bind(verification_token).execute(db).await;
+    ).bind(uid).bind(username).bind(email).bind(password_hash).bind(&verification_token).execute(db).await;
+
+    tokio::spawn(send_verification(
+        email.to_string(),
+        username.to_string(),
+        verification_token,
+        state,
+    ));
 
     match result {
         Ok(_) => Ok(()),

@@ -1,4 +1,54 @@
+use std::sync::Arc;
+
+use crate::http::{error::Error as HTTPError, AppState};
+use anyhow::Error;
 use rand::{distributions::Alphanumeric, Rng};
+
+use mail_send::mail_builder::MessageBuilder;
+
+const VERIFICATION_TEMPLATE: &str = r#"
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset='UTF-8'>
+    <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+    <title>Email Verification</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            padding: 20px;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: #ffffff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            text-align: center;
+        }
+        .button {
+            display: inline-block;
+            background-color: #007bff;
+            color: #ffffff;
+            padding: 10px 20px;
+            text-decoration: none;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class='container'>
+        <h2>Email Verification</h2>
+        <p>Click the button below to verify your email address:</p>
+        <a href='{{verification_link}}' class='button'>Verify Email</a>
+        <p>If you did not request this, you can safely ignore this email.</p>
+    </div>
+</body>
+</html>
+"#;
 
 pub fn random_string(length: usize) -> String {
     rand::thread_rng()
@@ -6,4 +56,35 @@ pub fn random_string(length: usize) -> String {
         .take(length)
         .map(char::from)
         .collect()
+}
+
+pub async fn send_verification(
+    to: String,
+    username: String,
+    token: String,
+    state: Arc<AppState>,
+) -> Result<(), HTTPError> {
+    let verification_link = format!("http://localhost:8080/auth-user/{}/{}", username, token);
+    let body = VERIFICATION_TEMPLATE.replace("{{verification_link}}", &verification_link);
+
+    send_mail(&to, "Email Verification", &body, &state).await?;
+
+    Ok(())
+}
+
+pub async fn send_mail(to: &str, subject: &str, html: &str, state: &AppState) -> Result<(), Error> {
+    // send mail
+    let builder = state.smtp_builder.clone();
+    let message = MessageBuilder::new()
+        .from((
+            state.config.mail_sender.to_string(),
+            state.config.mail_from.to_string(),
+        ))
+        .to(to)
+        .subject(subject)
+        .html_body(html);
+
+    builder.connect().await?.send(message).await?;
+
+    Ok(())
 }
