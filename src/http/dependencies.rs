@@ -38,8 +38,7 @@ struct AuthClaims {
     exp: i64,
 }
 
-// TODO: Try to make it so that the password is is not borrowed but owned.
-pub fn hash_password(password: &str) -> Result<String, HTTPError> {
+pub fn hash_password(password: String) -> Result<String, HTTPError> {
     let salt = SaltString::generate(&mut OsRng);
     let argon2 = Argon2::default();
 
@@ -52,7 +51,7 @@ pub fn hash_password(password: &str) -> Result<String, HTTPError> {
     }
 }
 
-fn validate_password(password: &str, password_hash: &str) -> Result<bool, HTTPError> {
+fn validate_password(password: String, password_hash: &str) -> Result<bool, HTTPError> {
     let parsed_hash = PasswordHash::new(password_hash).map_err(|e| {
         log::debug!("Invalid password hash format: {:?}", e);
         HTTPError::Unauthorized
@@ -67,12 +66,16 @@ fn validate_password(password: &str, password_hash: &str) -> Result<bool, HTTPEr
     }
 }
 
-pub async fn auth_user(username: &str, password: &str, db: &PgPool) -> Result<AuthUser, HTTPError> {
+pub async fn auth_user(
+    username: &str,
+    password: String,
+    db: &PgPool,
+) -> Result<AuthUser, HTTPError> {
     // Fetch password hash from the database
     let (id, password_hash) = crud::user::get_hash(username, db).await?;
 
     // Validate the password
-    validate_password(&password, &password_hash)?;
+    validate_password(password, &password_hash)?;
 
     Ok(AuthUser { user_id: id })
 }

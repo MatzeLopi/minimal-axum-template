@@ -52,7 +52,8 @@ async fn token(
     Json(user): Json<UserLogin>,
 ) -> Result<impl IntoResponse, HTTPError> {
     let db = &state.db;
-    let auth_user = dependencies::auth_user(&user.username, &user.password, db).await;
+    let UserLogin { username, password } = user;
+    let auth_user = dependencies::auth_user(&username, password, db).await;
     match auth_user {
         Ok(auth_user) => {
             let token = auth_user.to_jwt(&state)?;

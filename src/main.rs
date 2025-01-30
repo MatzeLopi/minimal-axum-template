@@ -12,6 +12,7 @@ async fn main() -> anyhow::Result<()> {
     env_logger::init();
 
     let config = Config::parse();
+
     let smtp_manager = SmtpManager {
         host: config.mail_host.clone(),
         port: config.mail_port,

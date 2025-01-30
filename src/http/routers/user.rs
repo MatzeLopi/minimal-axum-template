@@ -35,11 +35,16 @@ async fn me(
 
 async fn create_user(
     State(state): State<Arc<AppState>>,
-    user: Json<NewUser>,
+    Json(user): Json<NewUser>,
 ) -> Result<impl IntoResponse, HTTPError> {
-    let password_hash = dependencies::hash_password(&user.password)?;
+    let NewUser {
+        username,
+        email,
+        password,
+    } = user;
+    let password_hash = dependencies::hash_password(password)?;
 
-    _ = crud::user::create_user(&user.username, &user.email, &password_hash, state).await?;
+    _ = crud::user::create_user(&username, &email, &password_hash, state).await?;
 
     Ok((StatusCode::CREATED, "User created successfully"))
 }
