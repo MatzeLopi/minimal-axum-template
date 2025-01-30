@@ -16,7 +16,7 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route("/create-user", post(create_user))
         .route("/delete-user", delete(delete_user))
         .route("/me", get(me))
-        .route("/auth-user/:username/:token", get(verify_user))
+        .route("/auth-user/{username}/{token}", get(verify_user))
         .with_state(state)
 }
 

@@ -29,6 +29,8 @@ argon2 = "0.5"
 
 # axum builds on the types in Tower
 tower = "0.5"
+tower-http = { version = "0.6", features = ["full"] }
+
 
 time = "0.3.30"
 
@@ -48,3 +50,4 @@ jsonwebtoken = "9.3.0"
 mail-send = "0.5.0"
 deadpool = { version = "0.12.1", features = ["rt_tokio_1"] }
 tokio-rustls = "0.26.1"
+http = "1.2.0"

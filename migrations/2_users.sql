@@ -1,6 +1,6 @@
 create table "users"
 (
-    id       uuid primary key,
+    user_id       uuid primary key,
     username      text collate "case_insensitive" unique not null,
     email         text collate "case_insensitive" unique not null,
     is_verified   boolean                                not null default false,
