@@ -61,13 +61,13 @@ pub async fn get_user_by_id(id: &Uuid, db: &PgPool) -> Result<User, HTTPError> {
     ///
     /// # Returns
     ///  Result<User, HTTPError> - The user if found, an error otherwise
-    let result = sqlx::query!("SELECT * FROM users WHERE id = $1", id)
+    let result = sqlx::query!("SELECT * FROM users WHERE user_id = $1", id)
         .fetch_one(db)
         .await;
 
     match result {
         Ok(row) => Ok(User {
-            id: row.id,
+            id: row.user_id,
             username: row.username,
             email: row.email,
             verified: row.is_verified,
@@ -139,7 +139,7 @@ pub async fn create_user(
     }
 
     let result = sqlx::query!(
-        "INSERT INTO users (id, username, email, password_hash, verification_token, is_verified) VALUES ($1, $2, $3, $4, $5 , false)",
+        "INSERT INTO users (user_id, username, email, password_hash, verification_token, is_verified) VALUES ($1, $2, $3, $4, $5 , false)",
         uid,
         username,
         email,
@@ -169,7 +169,7 @@ pub async fn delete_user(uid: &Uuid, db: &PgPool) -> Result<(), HTTPError> {
     ///
     /// # Returns
     ///  Result<(), sqlx::Error> - The result of the operation
-    let result = sqlx::query!("DELETE FROM users WHERE id = $1", uid)
+    let result = sqlx::query!("DELETE FROM users WHERE user_id = $1", uid)
         .bind(uid)
         .execute(db)
         .await;
@@ -188,11 +188,11 @@ pub async fn get_hash(username: &str, db: &PgPool) -> Result<(Uuid, String), sql
     /// # Returns
     ///  (Uuid, String) - The user's id and password hash
     let row = sqlx::query!(
-        "SELECT id, password_hash FROM users WHERE username = $1",
+        "SELECT user_id, password_hash FROM users WHERE username = $1",
         username
     )
     .fetch_one(db)
     .await?;
 
-    Ok((row.id, row.password_hash))
+    Ok((row.user_id, row.password_hash))
 }

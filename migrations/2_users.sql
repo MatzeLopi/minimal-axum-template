@@ -1,6 +1,6 @@
 create table "users"
 (
-    user_id       uuid primary key,
+    id       uuid primary key,
     username      text collate "case_insensitive" unique not null,
     email         text collate "case_insensitive" unique not null,
     is_verified   boolean                                not null default false,
@@ -10,4 +10,4 @@ create table "users"
     updated_at    timestamptz
 );
 
-SELECT trigger_updated_at('"user"');
+SELECT trigger_updated_at('"users"');

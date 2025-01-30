@@ -11,8 +11,10 @@ async fn main() -> anyhow::Result<()> {
     dotenv::dotenv().ok();
     env_logger::init();
 
+    // Load config
     let config = Config::parse();
 
+    // Create SMTP pool
     let smtp_manager = SmtpManager {
         host: config.mail_host.clone(),
         port: config.mail_port,
@@ -20,7 +22,6 @@ async fn main() -> anyhow::Result<()> {
         password: config.mail_password.clone(),
     };
 
-    // Create SMTP pool
     let smtp_pool: Pool<SmtpManager> = Pool::builder(smtp_manager).max_size(10).build().unwrap();
 
     // Create DB pool
@@ -30,6 +31,13 @@ async fn main() -> anyhow::Result<()> {
         .await
         .context("could not connect to database_url")?;
 
+    // Migrate the DB
+    sqlx::migrate!()
+        .run(&db)
+        .await
+        .context("could not run migrations")?;
+
+    // Start the server
     http::serve(config, db, smtp_pool).await.unwrap();
 
     Ok(())

@@ -20,5 +20,5 @@ begin
     EXECUTE FUNCTION set_updated_at();', tablename);
 end;
 $$ language plpgsql;
-
+-- Case insensitive collation for Postgres 
 create collation case_insensitive (provider = icu, locale = 'und-u-ks-level2', deterministic = false);
