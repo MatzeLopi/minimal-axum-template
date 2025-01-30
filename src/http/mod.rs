@@ -1,13 +1,14 @@
-use crate::config::Config;
+use crate::{config::Config, SmtpManager};
 use anyhow::Context;
 use axum::Router;
+use deadpool::managed::Pool;
 use sqlx::PgPool;
 use std::sync::Arc;
-pub mod error;
-pub mod utils;
-use mail_send::SmtpClientBuilder;
+
 mod dependencies;
+pub mod error;
 mod routers;
+pub mod utils;
 
 // Include auth router
 
@@ -15,19 +16,15 @@ mod routers;
 pub struct AppState {
     pub config: Arc<Config>,
     pub db: PgPool,
-    pub smtp_builder: Arc<SmtpClientBuilder<String>>,
+    pub smtp_pool: Arc<Pool<SmtpManager>>,
 }
 
-pub async fn serve(
-    config: Config,
-    db: PgPool,
-    smtp_builder: SmtpClientBuilder<String>,
-) -> anyhow::Result<()> {
+pub async fn serve(config: Config, db: PgPool, smtp_pool: Pool<SmtpManager>) -> anyhow::Result<()> {
     // Create shared state
     let shared_state = Arc::new(AppState {
         config: Arc::new(config),
         db,
-        smtp_builder: Arc::new(smtp_builder),
+        smtp_pool: Arc::new(smtp_pool),
     });
 
     // Build the app router

@@ -1,8 +1,8 @@
 use anyhow::Context; // Needed for context to work
 use clap::Parser; // Needed for parse to work
-use mail_send::SmtpClientBuilder;
-use rust_backend::config::Config;
+use deadpool::managed::Pool;
 use rust_backend::http;
+use rust_backend::{config::Config, SmtpManager};
 use sqlx::postgres::PgPoolOptions;
 
 #[tokio::main]
@@ -12,14 +12,16 @@ async fn main() -> anyhow::Result<()> {
     env_logger::init();
 
     let config = Config::parse();
-    todo!("Wrap the smtp in deadpool, connect and auto reconnect");
-    let smtp_builder =
-        SmtpClientBuilder::new(config.mail_host.to_string(), config.mail_port.clone()).credentials(
-            (
-                config.mail_username.to_string(),
-                config.mail_password.to_string(),
-            ),
-        );
+    let smtp_manager = SmtpManager {
+        host: config.mail_host.clone(),
+        port: config.mail_port,
+        username: config.mail_username.clone(),
+        password: config.mail_password.clone(),
+    };
+
+    // Create SMTP pool
+    let smtp_pool: Pool<SmtpManager> = Pool::builder(smtp_manager).max_size(10).build().unwrap();
+
     // Create DB pool
     let db = PgPoolOptions::new()
         .max_connections(50)
@@ -27,7 +29,7 @@ async fn main() -> anyhow::Result<()> {
         .await
         .context("could not connect to database_url")?;
 
-    http::serve(config, db, smtp_builder).await.unwrap();
+    http::serve(config, db, smtp_pool).await.unwrap();
 
     Ok(())
 }

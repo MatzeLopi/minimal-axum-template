@@ -74,7 +74,8 @@ pub async fn send_verification(
 
 pub async fn send_mail(to: &str, subject: &str, html: &str, state: &AppState) -> Result<(), Error> {
     // send mail
-    let builder = state.smtp_builder.clone();
+    let mut smtp_client = state.smtp_pool.get().await?;
+
     let message = MessageBuilder::new()
         .from((
             state.config.mail_sender.to_string(),
@@ -84,7 +85,7 @@ pub async fn send_mail(to: &str, subject: &str, html: &str, state: &AppState) ->
         .subject(subject)
         .html_body(html);
 
-    builder.connect().await?.send(message).await?;
+    smtp_client.send(message).await?;
 
     Ok(())
 }
