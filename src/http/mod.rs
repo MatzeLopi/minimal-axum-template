@@ -1,10 +1,10 @@
 use crate::{config::Config, SmtpManager};
 use anyhow::Context;
-use axum::http::header::{HeaderValue, ACCESS_CONTROL_ALLOW_ORIGIN};
+use axum::http::header::HeaderValue;
 use axum::Router;
 use deadpool::managed::Pool;
 
-use http::Method;
+use http::{header, Method};
 use sqlx::PgPool;
 use std::sync::Arc;
 use tower_http::cors::CorsLayer;
@@ -50,7 +50,19 @@ pub async fn serve(config: Config, db: PgPool, smtp_pool: Pool<SmtpManager>) -> 
 
     let cors = CorsLayer::new()
         .allow_methods([Method::GET, Method::POST, Method::DELETE, Method::PUT])
-        .allow_origin(origin);
+        .allow_origin(origin)
+        .allow_credentials(true)
+        .allow_headers([
+            header::CONTENT_TYPE,
+            header::RANGE,
+            header::ACCEPT,
+            header::AUTHORIZATION,
+            header::ORIGIN,
+            header::HOST,
+            header::COOKIE,
+            header::SET_COOKIE,
+            header::HeaderName::from_static("x-csrf-token"),
+        ]);
 
     // Build the app router
     let app = create_router(&shared_state).layer(cors);
