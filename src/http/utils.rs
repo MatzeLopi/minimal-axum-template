@@ -2,9 +2,8 @@ use std::sync::Arc;
 
 use crate::http::{error::Error as HTTPError, AppState};
 use anyhow::Error;
-use rand::{distributions::Alphanumeric, Rng};
-
 use mail_send::mail_builder::MessageBuilder;
+use rand::{distributions::Alphanumeric, Rng};
 
 const VERIFICATION_TEMPLATE: &str = r#"
 <!DOCTYPE html>

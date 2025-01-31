@@ -14,9 +14,12 @@ use std::sync::Arc;
 pub fn router(state: Arc<AppState>) -> Router {
     Router::new()
         .route("/create-user", post(create_user))
-        .route("/delete-user", delete(delete_user))
-        .route("/me", get(me))
-        .route("/auth-user/{username}/{token}", get(verify_user))
+        .route("/users/delete-user", delete(delete_user))
+        .route("/users/me", get(me))
+        .route("/users/me/update-password", post(update_password))
+        .route("/users/available/username", get(username_available))
+        .route("/users/available/email", get(email_available))
+        .route("/users/verify/{username}/{token}", get(verify_user))
         .with_state(state)
 }
 
@@ -35,18 +38,54 @@ async fn me(
 
 async fn create_user(
     State(state): State<Arc<AppState>>,
+    _: dependencies::CsrfValidator,
     Json(user): Json<NewUser>,
 ) -> Result<impl IntoResponse, HTTPError> {
+    log::debug!("New user creation started");
     let NewUser {
         username,
         email,
         password,
     } = user;
+
     let password_hash = dependencies::hash_password(password)?;
 
     _ = crud::user::create_user(&username, &email, &password_hash, state).await?;
-
+    log::debug!("Successfully created new user");
     Ok((StatusCode::CREATED, "User created successfully"))
+}
+
+async fn update_password(
+    State(state): State<Arc<AppState>>,
+    user: dependencies::AuthUser,
+    password: String,
+) -> Result<impl IntoResponse, HTTPError> {
+    let pw_hash = dependencies::hash_password(password)?;
+    if crud::user::update_password(&user.user_id, &pw_hash, &state.db).await? == true {
+        Ok(StatusCode::OK)
+    } else {
+        Err(HTTPError::InternalServerError)
+    }
+}
+
+async fn username_available(
+    State(state): State<Arc<AppState>>,
+    username: String,
+) -> Result<impl IntoResponse, HTTPError> {
+    match crud::user::check_username(&username, &state.db).await {
+        true => Ok(StatusCode::OK),
+        false => Ok(StatusCode::CONFLICT),
+    }
+}
+
+async fn email_available(
+    State(state): State<Arc<AppState>>,
+    email: String,
+) -> Result<impl IntoResponse, HTTPError> {
+    match crud::user::check_email(&email, &state.db).await {
+        true => Ok(StatusCode::OK),
+        false => Ok(StatusCode::CONFLICT),
+    }
 }
 
 async fn verify_user(
@@ -63,6 +102,7 @@ async fn verify_user(
 
 async fn delete_user(
     State(state): State<Arc<AppState>>,
+    _: dependencies::CsrfValidator,
     auth_user: dependencies::AuthUser,
 ) -> Result<impl IntoResponse, HTTPError> {
     _ = crud::user::delete_user(&auth_user.user_id, &state.db).await?;

@@ -61,7 +61,8 @@ pub async fn serve(config: Config, db: PgPool, smtp_pool: Pool<SmtpManager>) -> 
             header::HOST,
             header::COOKIE,
             header::SET_COOKIE,
-            header::HeaderName::from_static("x-csrf-token"),
+            header::HeaderName::from_static("x_csft"),
+            header::HeaderName::from_static("s_csft"),
         ]);
 
     // Build the app router

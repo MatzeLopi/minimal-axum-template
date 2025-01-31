@@ -4,15 +4,16 @@ use crate::{
     schemas::users::UserLogin,
 };
 
+use axum_extra::extract::cookie::{Cookie, CookieJar, Expiration};
+
 use axum::{
     extract::{Json, State},
-    http::{header::SET_COOKIE, HeaderMap, StatusCode},
+    http::StatusCode,
     response::IntoResponse,
     routing::{get, post, Router},
 };
 use serde_json::json;
 use std::sync::Arc;
-use std::time::Duration;
 
 pub fn router(state: Arc<AppState>) -> Router {
     Router::new()
@@ -26,29 +27,33 @@ async fn ok() -> impl IntoResponse {
     (StatusCode::OK, axum::Json(json!({ "status": "ok" })))
 }
 
-async fn get_csfr() -> impl IntoResponse {
+async fn get_csfr(mut jar: CookieJar) -> impl IntoResponse {
     // Generate a random token
-    let csrf_token: String = utils::random_string(32);
+    let csft: String = utils::random_string(32);
+    let expiration = Expiration::from(time::OffsetDateTime::now_utc() + time::Duration::hours(24));
+    let server_cookie = Cookie::build(("s_csft", csft.clone()))
+        .secure(true)
+        .http_only(true)
+        .expires(expiration)
+        .build();
+    let client_cookie = Cookie::build(("x_csft", csft))
+        .secure(true)
+        .http_only(false)
+        .expires(expiration)
+        .build();
+    jar = jar
+        .remove(Cookie::from("s_csft"))
+        .remove(Cookie::from("x_csft"))
+        .add(server_cookie)
+        .add(client_cookie);
 
-    // Cookie
-    let cookie: String = format!(
-        "csrf_token={}; HttpOnly; Secure; SameSite=Strict; Max-Age={}",
-        csrf_token,
-        Duration::from_secs(60 * 60 * 24).as_secs() // 1 day
-    );
-
-    let mut headers: HeaderMap = HeaderMap::new();
-    headers.insert(SET_COOKIE, cookie.parse().unwrap());
-
-    return (
-        StatusCode::OK,
-        headers,
-        format!(r#"{{"csrf_token": "{}"}}"#, csrf_token),
-    );
+    log::debug!("Request");
+    return (StatusCode::OK, jar);
 }
 
 async fn token(
     State(state): State<Arc<AppState>>,
+    _: dependencies::CsrfValidator,
     Json(user): Json<UserLogin>,
 ) -> Result<impl IntoResponse, HTTPError> {
     let db = &state.db;
@@ -57,7 +62,7 @@ async fn token(
     match auth_user {
         Ok(auth_user) => {
             let token = auth_user.to_jwt(&state)?;
-            Ok(token)
+            Ok((StatusCode::OK, Json(token)))
         }
         Err(e) => Err(e),
     }

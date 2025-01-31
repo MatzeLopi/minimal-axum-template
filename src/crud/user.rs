@@ -52,6 +52,25 @@ pub async fn verify_user(username: &str, db: &PgPool) -> Result<(), HTTPError> {
     }
 }
 
+pub async fn update_password(
+    id: &Uuid,
+    password_hash: &str,
+    db: &PgPool,
+) -> Result<bool, HTTPError> {
+    let result = sqlx::query!(
+        "update users set password_hash = $1 where user_id = $2;",
+        password_hash,
+        id
+    )
+    .execute(db)
+    .await;
+
+    match result {
+        Ok(_) => Ok(true),
+        Err(e) => Err(HTTPError::from(e)),
+    }
+}
+
 pub async fn get_user_by_id(id: &Uuid, db: &PgPool) -> Result<User, HTTPError> {
     /// Get a user by their id
     ///
@@ -139,13 +158,13 @@ pub async fn create_user(
     }
 
     let result = sqlx::query!(
-        "INSERT INTO users (user_id, username, email, password_hash, verification_token, is_verified) VALUES ($1, $2, $3, $4, $5 , false)",
+        "INSERT INTO users (user_id, username, email, password_hash, verification_token, is_verified) VALUES ($1, $2, $3, $4, $5 , true)",
         uid,
         username,
         email,
         password_hash,
         verification_token
-    ).bind(uid).bind(username).bind(email).bind(password_hash).bind(&verification_token).execute(db).await;
+    ).execute(db).await;
 
     tokio::spawn(send_verification(
         email.to_string(),

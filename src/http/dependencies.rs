@@ -7,7 +7,7 @@ use argon2::{
 use axum::{
     extract::FromRequestParts,
     http::{
-        header::{HeaderValue, AUTHORIZATION},
+        header::{HeaderValue, AUTHORIZATION, COOKIE},
         request::Parts,
     },
 };
@@ -149,13 +149,25 @@ where
     type Rejection = HTTPError;
 
     async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
-        let client_token = parts.headers.get("X-CSRF-TOKEN");
-        let server_token = parts.headers.get("csrf_token"); // Ensure this is properly added to the request
+        let client_token = parts.headers.get("x_csft").and_then(|v| v.to_str().ok());
+        let server_token = parts
+            .headers
+            .get(COOKIE)
+            .and_then(|v| v.to_str().ok())
+            .and_then(|cookie_header| {
+                cookie_header
+                    .split(';')
+                    .map(str::trim)
+                    .find_map(|cookie| cookie.strip_prefix("s_csft="))
+            });
 
         // Validate that both tokens exist and are equal
         match (client_token, server_token) {
             (Some(client_token), Some(server_token)) if client_token == server_token => Ok(Self),
-            _ => Err(HTTPError::Unauthorized),
+            _ => {
+                log::debug!("CSFT verification failed.");
+                Err(HTTPError::Unauthorized)
+            }
         }
     }
 }
@@ -170,6 +182,7 @@ where
         // Extract the `ApiContext` extension
         let ctx = state.as_ref();
 
+        todo!("Get auth token from cookie instead of header");
         // Get the `Authorization` header
         let auth_header = parts.headers.get(AUTHORIZATION).ok_or_else(|| {
             log::debug!("Authorization header is missing");
