@@ -48,7 +48,10 @@ pub async fn verify_user(username: &str, db: &PgPool) -> Result<(), HTTPError> {
 
     match result {
         Ok(_) => Ok(()),
-        Err(e) => Err(HTTPError::from(e)),
+        Err(e) => {
+            log::error!("Error verifying user: {:?}", e);
+            Err(HTTPError::from(e))
+        }
     }
 }
 
@@ -67,7 +70,10 @@ pub async fn update_password(
 
     match result {
         Ok(_) => Ok(true),
-        Err(e) => Err(HTTPError::from(e)),
+        Err(e) => {
+            log::error!("Error updating password: {:?}", e);
+            Err(HTTPError::from(e))
+        }
     }
 }
 

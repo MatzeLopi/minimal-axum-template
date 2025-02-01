@@ -63,6 +63,7 @@ pub async fn serve(config: Config, db: PgPool, smtp_pool: Pool<SmtpManager>) -> 
             header::SET_COOKIE,
             header::HeaderName::from_static("x_csft"),
             header::HeaderName::from_static("s_csft"),
+            header::HeaderName::from_static("jwt"),
         ]);
 
     // Build the app router

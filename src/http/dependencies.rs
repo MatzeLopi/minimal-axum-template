@@ -6,11 +6,9 @@ use argon2::{
 };
 use axum::{
     extract::FromRequestParts,
-    http::{
-        header::{HeaderValue, AUTHORIZATION, COOKIE},
-        request::Parts,
-    },
+    http::{header::COOKIE, request::Parts},
 };
+use axum_extra::extract::cookie::CookieJar;
 use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
 use sqlx::PgPool;
 use time::OffsetDateTime;
@@ -21,7 +19,7 @@ use crate::http::{error::Error as HTTPError, AppState};
 
 const DEFAULT_SESSION_DURATION: time::Duration = time::Duration::weeks(1);
 
-const DEFAULT_AUTH: &str = "JWT";
+pub const DEFAULT_AUTH: &str = "jwt";
 
 pub struct AuthUser {
     pub user_id: Uuid,
@@ -100,25 +98,11 @@ impl AuthUser {
             }
         }
     }
-    fn from_authorization(ctx: &AppState, auth_header: &HeaderValue) -> Result<Self, HTTPError> {
-        let auth_header = auth_header.to_str().map_err(|_| {
-            log::debug!("Authorization header is not UTF-8");
-            HTTPError::Unauthorized
-        })?;
-
-        if !auth_header.starts_with(DEFAULT_AUTH) {
-            log::debug!(
-                "Authorization header is using the wrong scheme: {:?}",
-                auth_header
-            );
-            return Err(HTTPError::Unauthorized);
-        }
-
-        let jwt_token = &auth_header[DEFAULT_AUTH.len()..];
+    fn from_authorization(ctx: &AppState, jwt_token: &str) -> Result<Self, HTTPError> {
         let secret = &ctx.config.hmac_key;
         // `token` is a struct with 2 fields: `header` and `claims` where `claims` is your own struct.
         let token = decode::<AuthClaims>(
-            &jwt_token,
+            jwt_token,
             &DecodingKey::from_secret(secret.as_ref()),
             &Validation::default(),
         )
@@ -182,15 +166,19 @@ where
         // Extract the `ApiContext` extension
         let ctx = state.as_ref();
 
-        todo!("Get auth token from cookie instead of header");
-        // Get the `Authorization` header
-        let auth_header = parts.headers.get(AUTHORIZATION).ok_or_else(|| {
-            log::debug!("Authorization header is missing");
-            HTTPError::Unauthorized
-        })?;
+        // Parse cookies using CookieJar
+        let jar = CookieJar::from_request_parts(parts, state).await;
 
-        // Process the Authorization header
-        AuthUser::from_authorization(ctx, auth_header)
+        match jar {
+            Ok(jar) => {
+                let cookie = jar.get(DEFAULT_AUTH).ok_or_else(|| {
+                    log::debug!("JWT cookie is missing");
+                    HTTPError::Unauthorized
+                })?;
+                AuthUser::from_authorization(ctx, cookie.value())
+            }
+            Err(_) => Err(HTTPError::Unauthorized),
+        }
     }
 }
 
@@ -204,12 +192,20 @@ where
         // Extract the `ApiContext` extension
         let ctx = state.as_ref();
 
-        // Check if the `Authorization` header exists
-        let auth_user = parts
-            .headers
-            .get(AUTHORIZATION)
-            .and_then(|auth_header| AuthUser::from_authorization(ctx, auth_header).ok());
+        let jar = CookieJar::from_request_parts(parts, state).await;
 
-        Ok(Self(auth_user))
+        match jar {
+            Ok(jar) => {
+                // Try to get the cookie for JWT authorization
+                if let Some(cookie) = jar.get(DEFAULT_AUTH) {
+                    if let Ok(auth_user) = AuthUser::from_authorization(ctx, cookie.value()) {
+                        return Ok(Self(Some(auth_user)));
+                    }
+                }
+            }
+            Err(_) => {}
+        }
+
+        Ok(Self(None))
     }
 }
