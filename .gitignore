@@ -18,7 +18,6 @@ target/
 
 *.env
 
-
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
 # dependencies
@@ -38,7 +37,8 @@ node_modules/
 /.next/
 /out/
 # production
-/build
+build/
+dev/
 
 # misc
 .DS_Store
