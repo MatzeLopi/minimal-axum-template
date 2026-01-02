@@ -6,11 +6,9 @@ use argon2::{
 };
 use axum::{
     extract::FromRequestParts,
-    http::{
-        header::{HeaderValue, AUTHORIZATION},
-        request::Parts,
-    },
+    http::{header::COOKIE, request::Parts},
 };
+use axum_extra::extract::cookie::CookieJar;
 use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
 use sqlx::PgPool;
 use time::OffsetDateTime;
@@ -21,7 +19,7 @@ use crate::http::{error::Error as HTTPError, AppState};
 
 const DEFAULT_SESSION_DURATION: time::Duration = time::Duration::weeks(1);
 
-const DEFAULT_AUTH: &str = "JWT";
+pub const DEFAULT_AUTH: &str = "jwt";
 
 pub struct AuthUser {
     pub user_id: Uuid,
@@ -38,8 +36,7 @@ struct AuthClaims {
     exp: i64,
 }
 
-// TODO: Try to make it so that the password is is not borrowed but owned.
-pub fn hash_password(password: &str) -> Result<String, HTTPError> {
+pub fn hash_password(password: String) -> Result<String, HTTPError> {
     let salt = SaltString::generate(&mut OsRng);
     let argon2 = Argon2::default();
 
@@ -52,7 +49,7 @@ pub fn hash_password(password: &str) -> Result<String, HTTPError> {
     }
 }
 
-fn validate_password(password: &str, password_hash: &str) -> Result<bool, HTTPError> {
+fn validate_password(password: String, password_hash: &str) -> Result<bool, HTTPError> {
     let parsed_hash = PasswordHash::new(password_hash).map_err(|e| {
         log::debug!("Invalid password hash format: {:?}", e);
         HTTPError::Unauthorized
@@ -67,12 +64,16 @@ fn validate_password(password: &str, password_hash: &str) -> Result<bool, HTTPEr
     }
 }
 
-pub async fn auth_user(username: &str, password: &str, db: &PgPool) -> Result<AuthUser, HTTPError> {
+pub async fn auth_user(
+    username: &str,
+    password: String,
+    db: &PgPool,
+) -> Result<AuthUser, HTTPError> {
     // Fetch password hash from the database
     let (id, password_hash) = crud::user::get_hash(username, db).await?;
 
     // Validate the password
-    validate_password(&password, &password_hash)?;
+    validate_password(password, &password_hash)?;
 
     Ok(AuthUser { user_id: id })
 }
@@ -90,32 +91,21 @@ impl AuthUser {
         );
 
         match token {
-            Ok(token) => Ok(token),
+            Ok(token) => {
+                log::debug!("Token generated successfully");
+                Ok(token)
+            }
             Err(e) => {
                 log::debug!("Failed to encode token: {:?}", e);
                 Err(HTTPError::InternalServerError)
             }
         }
     }
-    fn from_authorization(ctx: &AppState, auth_header: &HeaderValue) -> Result<Self, HTTPError> {
-        let auth_header = auth_header.to_str().map_err(|_| {
-            log::debug!("Authorization header is not UTF-8");
-            HTTPError::Unauthorized
-        })?;
-
-        if !auth_header.starts_with(DEFAULT_AUTH) {
-            log::debug!(
-                "Authorization header is using the wrong scheme: {:?}",
-                auth_header
-            );
-            return Err(HTTPError::Unauthorized);
-        }
-
-        let jwt_token = &auth_header[DEFAULT_AUTH.len()..];
+    fn from_authorization(ctx: &AppState, jwt_token: &str) -> Result<Self, HTTPError> {
         let secret = &ctx.config.hmac_key;
         // `token` is a struct with 2 fields: `header` and `claims` where `claims` is your own struct.
         let token = decode::<AuthClaims>(
-            &jwt_token,
+            jwt_token,
             &DecodingKey::from_secret(secret.as_ref()),
             &Validation::default(),
         )
@@ -133,6 +123,7 @@ impl AuthUser {
     }
 }
 
+#[allow(dead_code)]
 impl OptionalAuthUser {
     pub fn user_id(&self) -> Option<Uuid> {
         self.0.as_ref().map(|auth_user| auth_user.user_id)
@@ -146,13 +137,25 @@ where
     type Rejection = HTTPError;
 
     async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
-        let client_token = parts.headers.get("X-CSRF-TOKEN");
-        let server_token = parts.headers.get("csrf_token"); // Ensure this is properly added to the request
+        let client_token = parts.headers.get("x_csft").and_then(|v| v.to_str().ok());
+        let server_token = parts
+            .headers
+            .get(COOKIE)
+            .and_then(|v| v.to_str().ok())
+            .and_then(|cookie_header| {
+                cookie_header
+                    .split(';')
+                    .map(str::trim)
+                    .find_map(|cookie| cookie.strip_prefix("s_csft="))
+            });
 
         // Validate that both tokens exist and are equal
         match (client_token, server_token) {
             (Some(client_token), Some(server_token)) if client_token == server_token => Ok(Self),
-            _ => Err(HTTPError::Unauthorized),
+            _ => {
+                log::debug!("CSFT verification failed.");
+                Err(HTTPError::Unauthorized)
+            }
         }
     }
 }
@@ -167,14 +170,19 @@ where
         // Extract the `ApiContext` extension
         let ctx = state.as_ref();
 
-        // Get the `Authorization` header
-        let auth_header = parts.headers.get(AUTHORIZATION).ok_or_else(|| {
-            log::debug!("Authorization header is missing");
-            HTTPError::Unauthorized
-        })?;
+        // Parse cookies using CookieJar
+        let jar = CookieJar::from_request_parts(parts, state).await;
 
-        // Process the Authorization header
-        AuthUser::from_authorization(ctx, auth_header)
+        match jar {
+            Ok(jar) => {
+                let cookie = jar.get(DEFAULT_AUTH).ok_or_else(|| {
+                    log::debug!("JWT cookie is missing");
+                    HTTPError::Unauthorized
+                })?;
+                AuthUser::from_authorization(ctx, cookie.value())
+            }
+            Err(_) => Err(HTTPError::Unauthorized),
+        }
     }
 }
 
@@ -188,12 +196,20 @@ where
         // Extract the `ApiContext` extension
         let ctx = state.as_ref();
 
-        // Check if the `Authorization` header exists
-        let auth_user = parts
-            .headers
-            .get(AUTHORIZATION)
-            .and_then(|auth_header| AuthUser::from_authorization(ctx, auth_header).ok());
+        let jar = CookieJar::from_request_parts(parts, state).await;
 
-        Ok(Self(auth_user))
+        match jar {
+            Ok(jar) => {
+                // Try to get the cookie for JWT authorization
+                if let Some(cookie) = jar.get(DEFAULT_AUTH) {
+                    if let Ok(auth_user) = AuthUser::from_authorization(ctx, cookie.value()) {
+                        return Ok(Self(Some(auth_user)));
+                    }
+                }
+            }
+            Err(_) => {}
+        }
+
+        Ok(Self(None))
     }
 }

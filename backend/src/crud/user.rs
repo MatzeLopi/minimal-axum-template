@@ -86,7 +86,7 @@ pub async fn create_user(
     let verification_token = random_string(8);
 
     if check_username(username, db).await || check_email(email, db).await {
-        return Err(HTTPError::Conflict);
+        return Err(HTTPError::Unauthorized);
     }
 
     let result = sqlx::query!(
@@ -100,7 +100,10 @@ pub async fn create_user(
 
     match result {
         Ok(_) => Ok(()),
-        Err(e) => Err(HTTPError::from(e)),
+        Err(e) => {
+            log::error!("Error creating user: {}", e);
+            Err(HTTPError::Unauthorized)
+        }
     }
 }
 
