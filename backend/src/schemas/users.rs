@@ -32,3 +32,9 @@ impl User {
         }
     }
 }
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct UpdatePassword {
+    pub old_password: String,
+    pub new_password: String,
+}

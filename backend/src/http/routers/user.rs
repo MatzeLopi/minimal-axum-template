@@ -1,13 +1,13 @@
 use crate::{
     crud,
-    http::{dependencies, error::Error as HTTPError, AppState},
-    schemas::users::{NewUser, User},
+    http::{AppState, dependencies, error::Error as HTTPError},
+    schemas::users::{NewUser, UpdatePassword, User},
 };
 use axum::{
     extract::{Json, Path, State},
     http::StatusCode,
     response::IntoResponse,
-    routing::{delete, get, post, Router},
+    routing::{Router, delete, get, post},
 };
 use std::sync::Arc;
 use uuid::Uuid;
@@ -18,7 +18,7 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route("/users/delete-user", delete(delete_user))
         .route("/users/me", get(me))
         .route("/users/me/update-password", post(update_password))
-        .route("/users/verify/{username}/{token}", get(verify_user))
+        .route("/users/verify/{username}/{token}", post(verify_user))
         .with_state(state)
 }
 
@@ -63,11 +63,15 @@ async fn create_user(
 
 async fn update_password(
     State(state): State<Arc<AppState>>,
-    user: dependencies::AuthUser,
-    password: String,
+    auth_user: dependencies::AuthUser,
+    Json(update_struct): Json<UpdatePassword>,
 ) -> Result<impl IntoResponse, HTTPError> {
-    let pw_hash = dependencies::hash_password(password)?;
-    if crud::user::update_password(&user.user_id, &pw_hash, &state.db).await? == true {
+    let user = crud::user::get_user_by_id(&auth_user.user_id, &state.db).await?;
+    let old_hash = crud::user::get_hash(&user.username, &state.db).await?.1;
+    let pw_hash = dependencies::hash_password(update_struct.new_password)?;
+
+    dependencies::validate_password(update_struct.old_password, &old_hash)?;
+    if crud::user::update_password(&auth_user.user_id, &pw_hash, &state.db).await? == true {
         Ok(StatusCode::OK)
     } else {
         log::error!("Failed to update password");

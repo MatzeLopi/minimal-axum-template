@@ -1,21 +1,21 @@
 // External Crates
 use crate::crud;
 use argon2::{
-    password_hash::{rand_core::OsRng, PasswordHash, PasswordHasher, PasswordVerifier, SaltString},
     Argon2,
+    password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString, rand_core::OsRng},
 };
 use axum::{
     extract::FromRequestParts,
     http::{header::COOKIE, request::Parts},
 };
 use axum_extra::extract::cookie::CookieJar;
-use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
+use jsonwebtoken::{DecodingKey, EncodingKey, Header, Validation, decode, encode};
 use sqlx::PgPool;
 use time::OffsetDateTime;
 use uuid::Uuid;
 
 // Internal Modules
-use crate::http::{error::Error as HTTPError, AppState};
+use crate::http::{AppState, error::Error as HTTPError};
 
 const DEFAULT_SESSION_DURATION: time::Duration = time::Duration::weeks(1);
 
@@ -49,7 +49,7 @@ pub fn hash_password(password: String) -> Result<String, HTTPError> {
     }
 }
 
-fn validate_password(password: String, password_hash: &str) -> Result<bool, HTTPError> {
+pub fn validate_password(password: String, password_hash: &str) -> Result<bool, HTTPError> {
     let parsed_hash = PasswordHash::new(password_hash).map_err(|e| {
         log::debug!("Invalid password hash format: {:?}", e);
         HTTPError::Unauthorized

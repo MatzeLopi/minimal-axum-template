@@ -1,8 +1,13 @@
+use crate::SmtpManager;
 use crate::config::Config;
 use anyhow::Context;
 use axum::Router;
+use axum::http::header::HeaderValue;
+use deadpool::managed::Pool;
+use http::{Method, header};
 use sqlx::PgPool;
 use std::sync::Arc;
+use tower_http::cors::CorsLayer;
 
 pub mod error;
 pub mod utils;
@@ -27,16 +32,18 @@ async fn clean_db(db: PgPool) {
     }
 }
 #[derive(Clone)]
-struct AppState {
-    config: Arc<Config>,
-    db: PgPool,
+pub struct AppState {
+    pub config: Arc<Config>,
+    pub db: PgPool,
+    pub smtp_pool: Arc<Pool<SmtpManager>>,
 }
 
-pub async fn serve(config: Config, db: PgPool) -> anyhow::Result<()> {
+pub async fn serve(config: Config, db: PgPool, smtp_pool: Pool<SmtpManager>) -> anyhow::Result<()> {
     // Create shared state
     let shared_state = Arc::new(AppState {
         config: Arc::new(config),
         db,
+        smtp_pool: Arc::new(smtp_pool),
     });
 
     let origin = "http://localhost:3000".parse::<HeaderValue>().unwrap();

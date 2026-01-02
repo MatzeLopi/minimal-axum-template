@@ -38,7 +38,7 @@ async fn main() -> anyhow::Result<()> {
         .context("could not run migrations")?;
 
     // Start Server
-    http::serve(config, db).await.unwrap();
+    http::serve(config, db, smtp_pool).await.unwrap();
 
     Ok(())
 }
