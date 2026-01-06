@@ -2,7 +2,7 @@ use anyhow::Context; // Needed for context to work
 use clap::Parser; // Needed for parse to work
 use deadpool::managed::Pool;
 use rust_backend::http;
-use rust_backend::{config::Config, SmtpManager};
+use rust_backend::{SmtpManager, config::Config};
 use sqlx::postgres::PgPoolOptions;
 
 #[tokio::main]
@@ -10,6 +10,13 @@ async fn main() -> anyhow::Result<()> {
     // Check if .env file exists, init logger, loda config
     dotenv::dotenv().ok();
     env_logger::init();
+
+    let provider = tokio_rustls::rustls::crypto::aws_lc_rs::default_provider();
+
+    // Install it globally and crash if it fails
+    provider
+        .install_default()
+        .expect("Failed to install rustls crypto provider");
 
     // Load config
     let config = Config::parse();

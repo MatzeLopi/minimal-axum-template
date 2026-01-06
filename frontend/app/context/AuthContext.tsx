@@ -1,19 +1,18 @@
-
 "use client";
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import api from '../lib/api';
 import { useRouter } from 'next/navigation';
 
 interface User {
-    user_id: string;
+    id: string;
     username: string;
     email: string;
 }
 
 interface AuthContextType {
     user: User | null;
-    login: (token: string) => void;
-    logout: () => void;
+    login: () => Promise<void>;
+    logout: () => Promise<void>;
     isLoading: boolean;
 }
 
@@ -24,30 +23,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const [isLoading, setIsLoading] = useState(true);
     const router = useRouter();
 
-    useEffect(() => {
-        // On mount, check if we have a token and fetch user details
-        const token = localStorage.getItem('token');
-        if (token) {
-            api.get('/users/me') // Assuming you have a "me" endpoint or similar
-                .then(({ data }) => setUser(data))
-                .catch(() => logout()) // Invalid token
-                .finally(() => setIsLoading(false));
-        } else {
-            setIsLoading(false);
-        }
-    }, []);
-
-    const login = (token: string) => {
-        localStorage.setItem('token', token);
-        // Fetch user immediately after setting token
-        api.get('/users/me').then(({ data }) => {
+    const fetchUser = async () => {
+        try {
+            const { data } = await api.get('/users/me');
             setUser(data);
-            router.push('/dashboard');
-        });
+        } catch (error) {
+            setUser(null);
+        }
     };
 
-    const logout = () => {
-        localStorage.removeItem('token');
+    useEffect(() => {
+        fetchUser().finally(() => setIsLoading(false));
+    }, []);
+
+    const login = async () => {
+        await fetchUser();
+    };
+
+    const logout = async () => {
+        try {
+            await api.get('/logout');
+        } catch (err) {
+            console.error("Logout error", err);
+        }
         setUser(null);
         router.push('/login');
     };

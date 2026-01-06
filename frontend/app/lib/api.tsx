@@ -1,18 +1,28 @@
 import axios from 'axios';
 
 const api = axios.create({
-    baseURL: 'http://localhost:8080', // Matches your Axum backend port
+    baseURL: 'http://localhost:8080',
+    withCredentials: true,
     headers: {
         'Content-Type': 'application/json',
-    },
+    }
 });
 
-// Request Interceptor: Auto-attach JWT
+const getCookie = (name: string) => {
+    if (typeof document === 'undefined') return null;
+    const value = `; ${document.cookie}`;
+    const parts = value.split(`; ${name}=`);
+    if (parts.length === 2) return parts.pop()?.split(';').shift();
+    return null;
+};
+
 api.interceptors.request.use((config) => {
-    if (typeof window !== 'undefined') {
-        const token = localStorage.getItem('token');
-        if (token) {
-            config.headers.Authorization = `Bearer ${token}`;
+    if (['post', 'put', 'delete', 'patch'].includes(config.method?.toLowerCase() || '')) {
+
+        const csrfToken = getCookie('x_csft');
+
+        if (csrfToken) {
+            config.headers['x_csft'] = csrfToken;
         }
     }
     return config;
