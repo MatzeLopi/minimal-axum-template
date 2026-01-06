@@ -13,7 +13,6 @@ async fn main() -> anyhow::Result<()> {
 
     let provider = tokio_rustls::rustls::crypto::aws_lc_rs::default_provider();
 
-    // Install it globally and crash if it fails
     provider
         .install_default()
         .expect("Failed to install rustls crypto provider");

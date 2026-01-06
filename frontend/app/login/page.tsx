@@ -41,7 +41,6 @@ export default function LoginPage() {
   };
 
   return (
-    // 'min-h-[100dvh]' handles mobile browser address bars better than min-h-screen
     <div className="flex min-h-[100dvh] items-center justify-center bg-gray-50 px-4 py-12 sm:px-6 lg:px-8">
 
       <div className="w-full max-w-sm space-y-6">
@@ -88,7 +87,6 @@ export default function LoginPage() {
                     type="text"
                     required
                     disabled={isLoading}
-                    // text-base prevents iOS zoom on focus. sm:text-sm reverts it on desktop.
                     className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 pl-10 text-base sm:text-sm text-gray-900 placeholder-gray-400 focus:border-gray-900 focus:outline-none focus:ring-1 focus:ring-gray-900 transition-all"
                     placeholder="Enter username"
                     onChange={(e) => setFormData({ ...formData, username: e.target.value })}
@@ -111,7 +109,6 @@ export default function LoginPage() {
                     type="password"
                     required
                     disabled={isLoading}
-                    // text-base for mobile, sm:text-sm for desktop
                     className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 pl-10 text-base sm:text-sm text-gray-900 placeholder-gray-400 focus:border-gray-900 focus:outline-none focus:ring-1 focus:ring-gray-900 transition-all"
                     placeholder="••••••••"
                     onChange={(e) => setFormData({ ...formData, password: e.target.value })}
@@ -127,7 +124,6 @@ export default function LoginPage() {
               <button
                 type="submit"
                 disabled={isLoading}
-                // Larger touch target on mobile (py-2.5 is decent, w-full ensures thumb reach)
                 className="flex w-full items-center justify-center rounded-lg bg-gray-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-gray-800 disabled:opacity-70 disabled:cursor-not-allowed transition-all"
               >
                 {isLoading ? (
